@@ -20,14 +20,6 @@ import Syntax
 import Tableau
 import Pretty
 
-import qualified MinimalSyntax 
-import qualified MinimalTableau
-import qualified MinimalPretty
-
-
--- TODO: create an LTL-LIKE type-class and a Prop-like typeclass
---       This should get rid of the dual Syntax/MinimalSyntax nonsense.
-
 
 ------------------------------------------------------------------------
 -- Runner
@@ -84,8 +76,8 @@ doOpt opts =
                                          then "\n" ++ expression opts
                                          else ""))
       let stringltls = filter (not . null) $ lines formText
-      let ltls = take 500 $ map (\s -> (parse' s, MinimalSyntax.parse' s)) stringltls
-      csvlines <- sequence $ timer (read $ timing opts) (stringify $ inp opts) sat MinimalTableau.sat ltls
+      let ltls = take 500 $ map (\s -> (parse' s, parse' s)) stringltls
+      csvlines <- sequence $ timer (read $ timing opts) (stringify $ inp opts) sat sat ltls
       sequence_ $ map putStrLn csvlines
   else
     do
@@ -94,12 +86,12 @@ doOpt opts =
                   else readFile $ inp opts
       if null $ out opts
         then if slow opts
-             then putSatRes MinimalTableau.satString MinimalSyntax.parse' formText
-             else putSatRes satString                parse'               formText
+             then putSatRes satString parse' formText
+             else putSatRes satString parse' formText
         else if slow opts
              then if graph opts
-                  then makeGraphs MinimalPretty.prettyGraph   MinimalSyntax.parse' formText
-                  else makeGraphs MinimalPretty.prettyTableau MinimalSyntax.parse' formText
+                  then makeGraphs prettyGraph   parse' formText
+                  else makeGraphs prettyTableau parse' formText
              else if graph opts
                   then makeGraphs prettyGraph                 parse'               formText
                   else makeGraphs prettyTableau               parse'               formText

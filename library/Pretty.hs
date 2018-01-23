@@ -19,8 +19,6 @@ import Data.GraphViz.Attributes.Complete
 
 import Syntax
 import Tableau
--- import MinimalSyntax
--- import MinimalTableau
 import ProofGraph
 
 {- TODO

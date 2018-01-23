@@ -6,10 +6,7 @@ module Test where
 import Prelude hiding (negate, or, and, until)
 
 import Syntax
-import Tableau hiding (desugar)
-
-import qualified MinimalSyntax
-import qualified MinimalTableau
+import Tableau 
 
 import Test.QuickCheck
 
@@ -91,41 +88,15 @@ varditest = "(E a) and  ((G (a -> E b)) and (( G (b -> E a)) and (G (!a || !b)))
 unsatisfiable :: [String]
 unsatisfiable = [varditest]
 
--- size 6 terminates in around 4s on my machine, using 2GB memory. zoiks!
-
-desugar :: Syntax.LTL a -> MinimalSyntax.LTL a
-desugar Syntax.F = MinimalSyntax.F
-desugar Syntax.T = MinimalSyntax.F `MinimalSyntax.Imp` MinimalSyntax.F
-desugar (Syntax.P a) = MinimalSyntax.P a
-desugar (Syntax.Not a) = desugar a `MinimalSyntax.Imp` MinimalSyntax.F
-desugar (Syntax.Imp a b) = desugar a `MinimalSyntax.Imp` desugar b
-desugar (Syntax.And a b) = desugar $ Syntax.Not(Syntax.Not a `Syntax.Or` Syntax.Not b)
-desugar (Syntax.Or a b)  = desugar $ Syntax.Not a `Syntax.Imp` b
-desugar (Syntax.WX a) = desugar $ Syntax.Not $ Syntax.X $ Syntax.Not a
-desugar (Syntax.X a)  = MinimalSyntax.X $ desugar a
-desugar (Syntax.E a)  = desugar $ Syntax.Not $ Syntax.G $ Syntax.Not a
-desugar (Syntax.G a)  = desugar a `MinimalSyntax.W` MinimalSyntax.F
-desugar (Syntax.W a b) = desugar a `MinimalSyntax.W` desugar b
-desugar (Syntax.U a b) = desugar $ (a `Syntax.W` b) `Syntax.And` Syntax.E b
-
 
 prop_satTerminates :: Property
 prop_satTerminates = forAll (resize 3 arbitrary :: Gen (Syntax.LTL Syntax.NamedProp)) $ \a ->
   let res = Tableau.sat a in label (if res then "sat" else "unsat") True
 
 prop_minSatTerminates :: Property
-prop_minSatTerminates = forAll (resize 3 arbitrary :: Gen (MinimalSyntax.LTL MinimalSyntax.NamedProp)) $ \a ->
-  let res = MinimalTableau.sat a in label (if res then "sat" else "unsat") True
-
-
--- prop_desugarRoundTrip :: Property
--- prop_desugarRoundTrip = forAll (resize 3 arbitrary :: Gen (Syntax.LTL Syntax.NamedProp)) $ \a ->
---   show a == show (desugar a)
-
-prop_equivalentProcs :: Property
-prop_equivalentProcs = forAll (resize 3 arbitrary :: Gen (Syntax.LTL Syntax.NamedProp)) $ \a ->
-    MinimalTableau.sat (desugar a) == Tableau.sat a
-
+prop_minSatTerminates = forAll (resize 3 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+  let res = sat a in label (if res then "sat" else "unsat") True
+  
 
 failures :: Foldable t => (a -> Bool) -> t a -> [a]
 failures f = foldr (\x rst -> if f x then rst else x : rst) []
@@ -138,14 +109,10 @@ qcTests = $quickCheckAll
 run_tests :: IO Bool
 run_tests =
   let satFail = failures sat $ map parse' satisfiable in
-  let minSatFail = failures MinimalTableau.sat $ map MinimalSyntax.parse' satisfiable in
   let unsatFail = failures unsat $ map parse' unsatisfiable in
-  let minUnsatFail = failures MinimalTableau.unsat $ map MinimalSyntax.parse' unsatisfiable in
   do
     putStrLn $ "Satisfiability: " ++ if null satFail  then "OK" else "failed"
-    putStrLn $ "Minimal Satisfiability: " ++ if null minSatFail  then "OK" else "failed"
     putStrLn $ "Unsatisfiability: " ++ if null unsatFail then "OK" else "failed"
-    putStrLn $ "Minimal Unsatisfiability: " ++ if null minUnsatFail then "OK" else "failed"
     putStrLn "Randomized tests:"
     eqSat  <- qcTests 
-    return (eqSat && null satFail && null minSatFail && null unsatFail && null minUnsatFail)
+    return (eqSat && null satFail  && null unsatFail)

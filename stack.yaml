@@ -1,0 +1,6 @@
+flags: {}
+packages:
+- .
+extra-deps:
+- argparser-0.3.4
+resolver: lts-10.3

@@ -92,10 +92,6 @@ unsatisfiable = [varditest]
 prop_satTerminates :: Property
 prop_satTerminates = forAll (resize 3 arbitrary :: Gen (Syntax.LTL Syntax.NamedProp)) $ \a ->
   let res = Tableau.sat a in label (if res then "sat" else "unsat") True
-
-prop_minSatTerminates :: Property
-prop_minSatTerminates = forAll (resize 3 arbitrary :: Gen (LTL NamedProp)) $ \a ->
-  let res = sat a in label (if res then "sat" else "unsat") True
   
 
 failures :: Foldable t => (a -> Bool) -> t a -> [a]

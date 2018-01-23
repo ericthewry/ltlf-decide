@@ -19,37 +19,37 @@ data LTL a =
   | Imp (LTL a) (LTL a)
   | X (LTL a)
   | W (LTL a) (LTL a)
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
-instance (Eq a, Show a) => Show (LTL a) where
-  show a = showPrec 0 a
-    where
-      showPrec :: (Eq a, Show a) => Int -> LTL a -> String
-      showPrec 0 (W a F) = "\\always " ++ showPrec 2 a
-      showPrec 0 (W a b) = showPrec 1 a ++ " \\upto " ++ showPrec 0 b
-      showPrec 0 a = showPrec 1 a
-      showPrec 1 (Imp F F) = "\\top"
-      showPrec 1 (Imp (X (Imp F F)) F) = "\\symend"
-      showPrec 1 (Imp (X (Imp a F)) F) = "\\wnext " ++ showPrec 2 a
-      showPrec 1 (Imp (W (Imp a F) F) F) = "\\ever " ++ showPrec 2 a
--- not quite working for some reason---breaks round-tripping. probably a problem w/equality
---      showPrec 1 (Imp (Imp (Imp (Imp (W a b) F) F) (Imp (Imp (W (Imp b' F) F) F) F)) F)
---        | b == b' = showPrec 1 a ++ " U " ++ showPrec 0 b
-      showPrec 1 (Imp (Imp (Imp (Imp a F) F) (Imp b F)) F) = showPrec 2 a ++ " \\wedge " ++ showPrec 2 b
-      showPrec 1 (Imp (Imp a F) b) = showPrec 2 a ++ " \\vee " ++ showPrec 2 b
-      showPrec 1 (Imp a F) = "\\neg" ++ showPrec 2 a
-      showPrec 1 (Imp a b) = showPrec 2 a ++ " \\to " ++ showPrec 1 b
-      showPrec 1 a = showPrec 2 a
-      showPrec 2 (Imp F F) = "\\top"
-      showPrec 2 (Imp (X (Imp F F)) F) = "\\symend"
-      showPrec 2 (Imp (X (Imp a F)) F) = "\\wnext " ++ showPrec 2 a
-      showPrec 2 (Imp (W (Imp a F) F) F) = "\\ever " ++ showPrec 2 a
-      showPrec 2 (Imp a F) = "\\neg" ++ showPrec 2 a
-      showPrec 2 (W a F) = "\\always " ++ showPrec 2 a
-      showPrec 2 F = "\\bot"
-      showPrec 2 (P a) = show a
-      showPrec 2 (X a) = "\\next " ++ showPrec 2 a
-      showPrec _ a = "(" ++ showPrec 0 a ++ ")"
+-- instance (Eq a, Show a) => Show (LTL a) where
+--   show a = showPrec 0 a
+--     where
+--       showPrec :: (Eq a, Show a) => Int -> LTL a -> String
+--       showPrec 0 (W a F) = "\\always " ++ showPrec 2 a
+--       showPrec 0 (W a b) = showPrec 1 a ++ " \\upto " ++ showPrec 0 b
+--       showPrec 0 a = showPrec 1 a
+--       showPrec 1 (Imp F F) = "\\top"
+--       showPrec 1 (Imp (X (Imp F F)) F) = "\\symend"
+--       showPrec 1 (Imp (X (Imp a F)) F) = "\\wnext " ++ showPrec 2 a
+--       showPrec 1 (Imp (W (Imp a F) F) F) = "\\ever " ++ showPrec 2 a
+-- -- not quite working for some reason---breaks round-tripping. probably a problem w/equality
+-- --      showPrec 1 (Imp (Imp (Imp (Imp (W a b) F) F) (Imp (Imp (W (Imp b' F) F) F) F)) F)
+-- --        | b == b' = showPrec 1 a ++ " U " ++ showPrec 0 b
+--       showPrec 1 (Imp (Imp (Imp (Imp a F) F) (Imp b F)) F) = showPrec 2 a ++ " \\wedge " ++ showPrec 2 b
+--       showPrec 1 (Imp (Imp a F) b) = showPrec 2 a ++ " \\vee " ++ showPrec 2 b
+--       showPrec 1 (Imp a F) = "\\neg" ++ showPrec 2 a
+--       showPrec 1 (Imp a b) = showPrec 2 a ++ " \\to " ++ showPrec 1 b
+--       showPrec 1 a = showPrec 2 a
+--       showPrec 2 (Imp F F) = "\\top"
+--       showPrec 2 (Imp (X (Imp F F)) F) = "\\symend"
+--       showPrec 2 (Imp (X (Imp a F)) F) = "\\wnext " ++ showPrec 2 a
+--       showPrec 2 (Imp (W (Imp a F) F) F) = "\\ever " ++ showPrec 2 a
+--       showPrec 2 (Imp a F) = "\\neg" ++ showPrec 2 a
+--       showPrec 2 (W a F) = "\\always " ++ showPrec 2 a
+--       showPrec 2 F = "\\bot"
+--       showPrec 2 (P a) = show a
+--       showPrec 2 (X a) = "\\next " ++ showPrec 2 a
+--       showPrec _ a = "(" ++ showPrec 0 a ++ ")"
 
 
 formSize :: LTL a -> Int

@@ -55,6 +55,9 @@ benchmarks:
     - base
     - ltlf-decide
     - criterion
+    - directory
+    - filepath
+    - split
     ghc-options:
     - -rtsopts
     - -threaded

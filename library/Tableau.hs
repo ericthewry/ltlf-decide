@@ -29,12 +29,14 @@ data PNP a
   deriving (Eq, Ord)
 
 instance (Eq a, Show a) => Show (PNP a) where
-  show (PNP _ p n) =
-    "\\left(" ++ showSet p ++ ", " ++ showSet n ++ "\\right)"                       
-
+  show (PNP Temp p n) = "<|" ++ show (PNP Norm p n) ++ "|>"
+  show (PNP Term p n) = show (PNP Norm p n) ++ "EOT"
+  show (PNP Norm p n) =
+    -- "\\left(" ++ showSet p ++ ", " ++ showSet n ++ "\\right)"                       
+    "( " ++ showSet p ++ ", " ++ showSet n ++ ")"
 
 showSet :: Show a => Set a -> String
-showSet s  | Set.null s = "\\emptyset"
+showSet s  | Set.null s = "" -- "\\emptyset"
            | otherwise = "\\{" ++ (intercalate "," (map show $ Set.toAscList s)) ++ "\\}"
 
 -- simplPNP :: Ord a => PNP a -> PNP a
@@ -126,6 +128,7 @@ sigma p = p {
   pos = sigma_one p `Set.union` sigma_two p `Set.union` sigma_three p,
   neg = sigma_four p `Set.union` sigma_five p
   }
+  
 
 makeSucc :: Ord a => PNP a -> [PNP a]
 makeSucc q =  
@@ -133,9 +136,9 @@ makeSucc q =
      || F `Set.member` pos q    -- Bot
   then []
   else case satisfying isImp (pos q) of -- (->+)
-    Just (Imp F _, posq') -> [q {pos = posq'}] -- opt for forms equiv to TOP
+    -- Just (Imp F _, posq') -> [q {pos = posq'}] -- opt for forms equiv to TOP
     Just (Imp a b, posq') ->
-      [q {pos = Set.insert b posq'}, -- need to use constr q here?????
+      [constr q (Set.insert b posq') (neg q) , -- need to use constr q here?????
        constr q posq' (Set.insert a $ neg q)]
     Just _ -> error "Expected Imp in posImp Case"
     Nothing ->
@@ -146,14 +149,14 @@ makeSucc q =
         Nothing ->
           case satisfying isW (pos q) of -- (W+)
             Just (W a b, posq') ->
-              [q {pos = Set.insert b posq'},
+              [constr q (Set.insert b posq') (neg q),
                constr q (posq' `Set.union` (Set.fromList [a, wkX (a `W` b)])) (neg q)
               ]
             Just _ -> error " expected W in posW case"
             Nothing ->
               case satisfying isW (neg q) of -- (W-)
                 Just (W a b, negq') ->
-                  [q {neg = negq' `Set.union` Set.fromList [a,b]},
+                  [constr q (pos q) (negq' `Set.union` Set.fromList [a,b]),
                    constr q
                      (Set.insert (X (negate (a `W` b))) (pos q))
                      (Set.insert b negq')]
@@ -167,6 +170,10 @@ makeSucc q =
     constr :: PNP a -> (Set (LTL a) -> Set (LTL a) -> PNP a)
     constr (PNP Term _ _) = PNP Term
     constr (PNP _ _ _)    = PNP Norm
+
+getPrimitives :: PNP a -> PNP a
+getPrimitives p = p { pos = Set.filter isProp (pos p),
+                      neg = Set.filter isProp (neg p)}
 
     
 dropTemporal :: LTL a -> LTL a

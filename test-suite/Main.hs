@@ -17,28 +17,33 @@ main = do
 
 spec :: Spec
 spec = parallel $ do
-    describe "Decision procedure" $ do
-      it "terminates on arbitrary inputs" $ do
-        forAll (resize 6 arbitrary :: Gen (LTL NamedProp)) $ \a ->
-          let res = sat a in
-            label (if res then "sat" else "unsat") True
+  describe "Parser & Pretty-Printer " $ do
+    it "are inverses" $ do
+      forAll (resize 100 arbitrary :: Gen (LTL NamedProp)) $ \f ->
+        parse' (show f) `shouldBe` f
+  
+  describe "Decision procedure" $ do
+    it "terminates on arbitrary inputs" $ do
+      forAll (resize 8 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        let res = sat a in
+          label (if res then "sat" else "unsat") True
 
-      it "rejects infinite traces " $ do
-        let a = P $ NamedProp "a"
-        let b = P $ NamedProp "b"
-        False `shouldBe` (sat $ ever a `Syntax.and` always (a `Imp` ever b) `Syntax.and` always (b `Imp` ever a) `Syntax.and` always (Syntax.negate a `Syntax.or` Syntax.negate b))
+    it "rejects infinite traces (De Giacomo & Vardi)" $ do
+      let a = P $ NamedProp "a"
+      let b = P $ NamedProp "b"
+      False `shouldBe` (sat $ ever a `Syntax.and` always (a `Imp` ever b) `Syntax.and` always (b `Imp` ever a) `Syntax.and` always (Syntax.negate a `Syntax.or` Syntax.negate b))
 
-      it "correctly parses & accepts sat formulae" $ do
-        foldr (\f b -> sat ( parse' f ) && b) True satisfiable
+    it "correctly parses & accepts sat formulae" $ do
+      foldr (\f b -> sat ( parse' f ) && b) True satisfiables
         
-      it "correctly parses & rejects unsat formulae" $ do
-        foldr (\f b -> (&&) b $ not $ sat $ parse' f ) True unsatisfiable 
+    it "correctly parses & accepts valid formulae" $ do
+      foldr (\f b -> (&&) b $ valid $ parse' f) True valids
 
 
 
 
-satisfiable :: [String]
-satisfiable = ["top",
+satisfiables :: [String]
+satisfiables = ["top",
                "a",
                "a or b",
                "(G a) -> (a W b)",
@@ -94,5 +99,34 @@ satisfiable = ["top",
                ]
 
 
-unsatisfiable :: [String]
-unsatisfiable = ["false"]
+valids :: [String]
+valids = ["true",
+         "a || !a",
+           -- axioms
+         "(WX(a -> b)) <-> ((WX a) -> (WX b))",          -- WkNextDistr
+         "end -> !X a",                                  -- EndNextContra
+         "E end",                                        -- Finite
+         "(a W b) <-> (b || (a && WX (a W b)))",         -- WkUntilUnroll
+         "(G a) -> G(WX a)",                             -- WkNextStep (ish)
+         "(G(a -> b)) && G (a -> WX a) -> G( a -> G b)", -- Induction (ish)
+           -- consequences
+         "!(X true && X false)",
+         "(!X a) <-> (end || X !a)",
+         "(WX a) <-> X a || end",
+         "(!end && WX !a -> !WX a)",
+         "(WX(a && b)) <-> (WX a && WX b)",
+         "(!WX a) -> WX !a",
+         "(G a) <-> (a && WX (G a))",
+           -- arbitrary
+         "(((!(G y) W ((((X true) || r) W ((X true) || false))&&(E ((X true) || false))))&&(E ((((X true) || r) W ((X true) || false)) &&(E ((X true) || false))))) || ((!((end || false) W (X false)) || ((G !(X false)) || false)) || false))",        
+         "((((X true) || false) || (WX l)) || false)",
+         "(((X ((!j || true) || (!m &&(false -> m)))) W (WX (WX end)))&&(E (WX (WX end))))",
+         "(WX (WX (true W ((k W a)&&(E a)))))",
+         "((X (WX true)) || (((((X k) -> !v)&&(v || (X k))) W ((true || !s) || false))&&(E ((true || !s) || false))))",
+         "(WX ((X ((false W true)&&(E true))) W (end || false)))",
+         "((WX true) || false)",
+         "(((WX (false -> p)) || (!p W (X false))) || (WX (((X z) -> !l)&&(l || (X z)))))",
+         "(((WX true) || (((false || false) || !e) || false)) || !(!s W (WX end)))",
+         "((X (((l W true)&&(E true)) || false)) || (WX (X (true&&l))))",
+         "((((X (X false)) W (((X !v) || (!v && (false -> v)))&&(((v || false) || !(false -> v)) || (WX v))))&&(E (((X !v) || (!v&&(false -> v)))&&(((v || false) || !(false -> v)) || (WX v))))) || (((!(end W l) || ((G !l) || false)) || (WX true)) || (((false || false) || !r) || false)))"
+         ]

@@ -10,7 +10,7 @@ import Syntax
 fileEnv :: FilePath -> IO (String, [String])
 fileEnv fileName = do
   formulae <- readFile fileName
-  return (takeBaseName fileName, splitOn "\n" formulae)
+  return (takeBaseName fileName, filter (not . null) $ splitOn "\n" formulae)
 
 getBenchFile :: Show a => [Char] -> [Char] -> a -> [Char] -> [Char]
 getBenchFile file name num ext =

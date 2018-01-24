@@ -1,0 +1,3 @@
+[submodule "benchmark/automatark"]
+	path = benchmark/automatark
+	url = git@github.com:lorisdanto/automatark.git

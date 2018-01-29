@@ -78,16 +78,19 @@ semantics, we would step `X ~a` forwards to the next state in the
 trace and evaluate `~a` there. In the Tableau we create a successor
 `P''` of `P'` that has none of the non-temporal formulae (in this case
 of `P''`), and removes one step of the temporal information. In our
-case `pos P'' = {~a}, neg P'' = {}`. Then to complete the evaluation, the successor of `P''` has only `a` in the negative set. Since this is not contradictory, we conclude that `a /\ X~a` is "satisfiable".
+case `pos P'' = {~a}, neg P'' = {}`. Then to complete the evaluation,
+the successor of `P''` has only `a` in the negative set. Since this is
+not contradictory, we conclude that `a /\ X~a` is "satisfiable".
 
 This process should feel similar to Brzozowski & Antimirov
 derivatives.
 
 We need only discuss how formulae like `a W b` are processed by the
 tableau. Luckily there is a sound axiom called WeakUntilUnroll that
-tells us that `a W b == b \/ a /\ ~X~(a W b)` and suddenly we dont
-have a temporal formula on the top level and can continue exploring
-the current state.
+tells us that `a W b == b \/ a /\ ~X~(a W b)`. Now, we apply this
+transformation to get rid of the temporal formulae at the top level of
+the AST. We continue by processing the disjunction, conjunction,
+negation.
 
 So far, we've discussed a decision procedure for LTL on infinite
 traces. There some small tricks that we do that make this method work
@@ -147,11 +150,19 @@ that we need a way to differentiate behavior at the end of time.
 >            | otherwise = "\\{" ++ (intercalate "," (map show $ Set.toAscList s)) ++ "\\}"
 >
 
-TODO : TALK ABOUT CLOSED-NESS AND WHAT IT MEANS
+We want to define a kind of semantics for these PNPs, so we say that a
+PNP is closed if `F` is a member of the positive set, or its positive
+and negative sets have a non-empty intersection. If we think of the
+positive set as "things that are true" and the negative set as "things
+that are false" then we certainly dont want `F` to be true, nor do we
+want a formula to be both true and false. This gives us the intuition
+that closed PNPs represent impossible and unsatisfiable states. When
+we construct the Tableau we will say that the root node is
+unsatisfiable if every path from it contains a closed node.
 
 > closed :: Ord a => PNP a -> Bool
 > closed p = F `Set.member` pos p
->   || not (Set.null (pos p `Set.intersection` neg p))
+>   || not $ Set.null (pos p `Set.intersection` neg p)
 
 
 Now we define the tableau using the adjacency list representation of a
@@ -206,31 +217,140 @@ we'll get to along the way, but lets start with `buildRoot`. Once
 we've built the tableau we need to find a finite path in it that
 represents a finite-length trace that satisfies the input formula.
 
-The basic idea of `buildRoot` is that it injects a formula `f` into the positive set of an empty PNP. In an LTL decision procedure that's all we would need to do, but in an LTLf decision procedure we need to take another simple step, which is to "inject finiteness". In other words, we insert one of the axioms of LTLf, FINITE, into the positive set. The FINITE axiom says `ever end` which means that eventually time will end. 
+The basic idea of `buildRoot` is that it injects a formula `f` into
+the positive set of an empty PNP. In an LTL decision procedure that's
+all we would need to do, but in an LTLf decision procedure we need to
+take another simple step, which is to "inject finiteness". In other
+words, we insert one of the axioms of LTLf, FINITE, into the positive
+set. The FINITE axiom says `ever end` which means that eventually time
+will end. By including this axiom in our root node, we are
+automatically going to be checking whether or not it is the last state
+in time, before we can take a step. We could have easily built this
+into our decision procedure itself from scratch, but this version
+doesn't require much modification to the Tableau decision procedure
+for LTL.
 
 > buildRoot :: Ord a => LTL a -> PNP a
 > buildRoot f = PNP Norm (Set.fromList [f, ever end]) Set.empty
 
-The functions `ever` and `end` are new, but can be defined in terms of `W`, `F` and `->`. For the full definition, see `./Syntax.hs`.
+The functions `ever` and `end` are new, but can be defined in terms of
+`W`, `F` and `->`. For the full definition, see `./Syntax.hs`.
 
-Now we can move onto defining the `makeSucc` function; it will take a
-PNP and return a list of successor PNPs. Since we are searching to
-find a contradiction, we want to define the `makeSucc` function such
-that for a PNP `P`, if every successor in `makeSucc P` is
-unsatisfiable, then `P` is also unsatisfiable. Since closed PNPs are
-unsatisfiable, we will eventually need to find a path that ends in a
-`Term` PNP with no closed nodes on it. For now, we are just concerned with how to define the `makeSucc` function.
+Now we can move onto defining the `makeSucc` function, which takes a
+PNP and return a list of successor PNPs. Since we are searching for a
+contradiction, we want to define the `makeSucc` function such that for
+a PNP `P`, if every successor in `makeSucc P` is unsatisfiable, tnhen
+`P` is also unsatisfiable. Since closed PNPs are unsatisfiable, we
+will eventually need to find a path that ends in a `Term` PNP with no
+closed nodes on it. For now, we are just concerned with how to define
+the `makeSucc` function.
+
+For each syntactic term in the positive and negative sets we define a
+rule that explores some aspect of the current time moves time
+forwards. Since we want to explore ever aspect of the current time
+step before moving to the next one, we prioritize non-temporal
+formulae before taking a step in the `X` modality. Below are the rules
+we use to explore the current modality (note that these rules will
+conflict so in our implementation we apply them in order, so that rule
+`i` is checked before rule `i+1`):
+
+1. For a PNP `Q`, if `Q` is closed or if `F` is in `pos Q`, take no
+step.
+
+If we have found a contradictory PNP, there is chance of finding a
+path that contains this node with no closed node in it, so we don't
+waste our time by exploring more successors of `Q`. It's not like it
+can get any more contradictory!
+
+2. For a PNP `Q` with `a -> b` in `pos Q`, define two successors `Ql`
+and `Qr`:
+
+  + Let `pos Ql = (pos Q \ {a -> b}) union {b}` and `neg Ql = neg Q`
+
+  + Let `pos Qr = (pos Q \ {a -> b})` and `neg Qr = neg Q union {a}`
+
+In classical logic, `a -> b == ~a \/ b`, which means have a choice
+between `~a` holding and `b` holding, so, we create a successor for
+each of those possible worlds implied by `a -> b`.
+
+3. For a PNP `Q` with `a -> b` in `neg Q`, define one successors `Q'`,
+such that `pos Q' = pos Q union {a}` and `neg Q = (neg Q \ {a -> b})
+union {b}`.
+
+Again, we can use the classical logic tautology `~ a -> b == a /\ ~b`,
+and so we put a in the positve set and `b` in the negative set. We
+could have just as easily made `pos Q = {a,~b}`, but then we would
+eventually have to put `b` in the negative set, and that is extra,
+unnecessary work that we can do here in one step.
+
+Notice that these first three rules take care of the entirety of
+classical logic; every conjunction, disjunction, negation, and
+implication that we would want to express is a combination of
+variables, implication and `F`. For more information about these
+incodings, see `./Syntax.hs`
+
+Now we want to move onto temporal operators. The obvious step would be
+to consider the `X` modality; however, that operator forces us to take
+a step in time, were as the weak-until operator has properties that
+can be expressed in the current time step, so before we can say that
+we have evaluated the current time step fully, we must check whether
+all occurences of weak-until have been discharged.
+
+4. For a PNP `Q` with `a W b` in `pos Q`, we define two successors
+`Ql` and `Qr`:
+
+  + Let `pos Ql = (pos Q \ {a W b}) union {b}` and `neg Ql = neg Q`.
+
+  + Let `pos Qr = (pos Q \ {a W b}) union {a}` and `neg Ql = neg Q union {X~ a W b}`.
+
+As mentioned above, these rules come from the WeakUntilUnroll axiom,
+which says that `a W b == b \/ a /\ ~X~ a W b`. If we wanted to, we
+could have defined a single successor which replaced `a W b` with `b
+\/ a /\ ~X~ a W b`, but this way we can skip the steps for conjunction
+and disjunction (which are really encoded as a bunch of implications),
+because the not-closed successors we would get from following this
+procedure on `b \/ a/\ ~X~ a W b` are exactly the `Ql` and `Qr` above.
+
+5. For a PNP `Q` with `a W b` in `neg Q`, we define two successors,
+`Ql` and `Qr`:
+
+  + Let `pos Ql = pos Q`, and let `neg Ql = (neg Q \ {a W b}) union {a,b}`
+
+  + Let `pos Qr = pos Q union {X~(a W b)}`, and `neg Qr = (neg Q \ {a W b}) union {b}`
+
+This comes from a simple consequence of the WeakUntilUnroll axiom,
+namely that `~ (a W b) == (~b /\ ~a) \/ ~b /\ X~(a W b)`, so we
+appropriately take each branch. Similar to the previous steps, we use
+all of the information we have to avoid duplicating work by stepping
+through all of the conjunctions, disjunctions and negations.
+
+Now that we can explore each individual state in time, we can step
+forward in time. There are two cases to consider here, either we are
+at then end of time, and `X top` is in the positive set, or we are not
+at the end of time, and we can take a step forwards.
+
+If we decide that we can take a step forwards, we will apply the
+`step` function to both the positive and negative sets of the
+PNP. When applied to a set `S`, this function computes the set `{f | X
+f in S}`. It drops all formulae that were expanded in the previous
+time step and keeps onlu those that must be evaluated in the next time
+step.
 
 > step :: Ord a => Set (LTL a) -> Set (LTL a)
-> step s = Set.map (\(X f) -> f) $ Set.filter isX s
->
-> sigma_one :: Ord a => PNP a -> Set (LTL a)  
-> sigma_one  p = step $ pos p
->
-> sigma_four :: Ord a => PNP a -> Set (LTL a)
-> sigma_four p = step $ neg p
+> step = Set.foldr (\f nextSet ->
+>            case f of
+>              (X f) -> Set.insert f nextSet
+>              _ -> nextSet
+>         ) Set.empty
 
-TODO Describe why and how we drop-temporal
+On the other hand, if we are at the end of time, we cannot take any
+steps, and so we can define a function `dropTemporal` that converts a
+formula `f` into another one representing the fact that `end /\ X y =
+F` for any formula `y`. This means that we will convert `X y` to `F`,
+and `a W b` to `a \/ b` before recursing on both `a` and `b`. We also
+define a function `terminalPNP` which lifts `dropTemporal` to PNPs,
+and makes sure that `end` information is still maintained by the PNP,
+namely `X top` is in the negative set.
     
 > dropTemporal :: LTL a -> LTL a
 > dropTemporal F = F
@@ -240,10 +360,10 @@ TODO Describe why and how we drop-temporal
 > dropTemporal (Imp a b) = Imp (dropTemporal a) (dropTemporal b)
 >
 > terminalPNP :: Ord a => PNP a -> PNP a
-> terminalPNP q = PNP Term (Set.map dropTemporal $ pos q) (Set.insert (X top) $ Set.map dropTemporal $ neg q)
+> terminalPNP q = PNP Term (Set.map dropTemporal $ pos q)
+>                          (Set.insert (X top) $ Set.map dropTemporal $ neg q)
 
-
-TODO : DEFINE THE RULES HERE IN PLAIN ENGLISH
+Now, we can put all of these pieces together into one `makeSucc` function!
 
 > makeSucc :: Ord a => PNP a -> [PNP a]
 > makeSucc q =  
@@ -293,7 +413,10 @@ TODO : DEFINE THE RULES HERE IN PLAIN ENGLISH
 >       return (v, sat' `Set.union` unsat)
 
 
-TODO : Describe the fixpoint
+Now we can define the fixpoint that applies the `makeSucc` function
+until there are no new PNPs to be added; we call this function
+`buildTableau`. We define a wrapper function `tableau` that obscures
+the continuation-passing needed for the fix-point.
 
 > buildTableau :: Ord a => (PNP a -> [PNP a]) -> [PNP a] -> Tableau a -> Tableau a
 > buildTableau _ [] t = t
@@ -306,10 +429,21 @@ TODO : Describe the fixpoint
 > tableau :: Ord a => LTL a -> Tableau a
 > tableau f = buildTableau makeSucc [buildRoot f] emptyTableau
 
-----------------------------------------------------------------------
--- Path finding
-----------------------------------------------------------------------
 
+Now that we've built the tableau, we need to determine whether or not
+the root node is closed. If the root node is closed is then it is
+unsatisfiable, and otherwise it is satisfiable. Unfortunately our
+definition of closed-ness only accounts for whether a node is
+contradictory in the moment, which many nodes are not. Even in the
+example of `a /\ ~a` it took several steps before we got to a closed
+node. To lift the definition to trees, we say that a node is closed if
+all of its successors are closed, or if its PNP is closed in the
+traditional sense. So, to conclude that a node is satsifiable, we only
+need to find a path that explores every possibility until the end of
+time, i.e. we get to a `Term` node. We call such paths "terminal
+paths" and the `terminalPath` function searches its input Tableau for
+these paths. The function `path` hids the fixpoint tail-recursion of
+`terminalPath`.
 
 > terminalPath :: Ord a => Tableau a -> Set (PNP a) -> PNP a -> Maybe [PNP a]
 > terminalPath _ _    p | closed p            = Nothing
@@ -321,24 +455,30 @@ TODO : Describe the fixpoint
 >   case paths of
 >     []       -> Nothing
 >     (path:_) -> Just (p:path)
-
+>
 > path :: Ord a => LTL a -> Maybe [PNP a]
 > path f = terminalPath (tableau f) Set.empty (buildRoot f)
 
+Now as defined before we can process the result of the `path` function
+as `sat`, `unsat` and `valid` which take LTLf formulae and return
+whether or not they are satisfiable, unsatisfiable or valid,
+respectively.
 
-------------------------------------------------------------------------
--- Satisfiability and validity checking
-------------------------------------------------------------------------
-
-> valid :: Ord a => LTL a -> Bool
-> valid = isNothing . path . negate
-
-> sat, unsat :: Ord a => LTL a -> Bool
+> sat, unsat, valid :: Ord a => LTL a -> Bool
 > sat   = isJust . path
 > unsat = not . sat
+> valid = isNothing . path . negate
+
+We also define a few useful functions for making interfacing with the
+decision procedure easier. `satString` returns `"sat"` if its input
+formula is satisfiable, and `"unsat"` otherwise.
 
 > satString :: Ord a => LTL a -> String
 > satString f = if sat f then "sat" else "unsat"
+
+The `check` function returns the strongest descriptor possible for an
+LTLf formula, i.e. if it is valid, it returns `"valid"`, if it is
+satisfiable it returns `"sat"`, and otherwise, it returns `"unsat"`.
 
 > check :: Ord a => LTL a -> String
 > check f =
@@ -347,19 +487,28 @@ TODO : Describe the fixpoint
 >   else if sat f
 >        then "sat" else "unsat"
 
+The `doCheck` function does exactly what the `check` function does,
+except it parses the string first.
+
 > doCheck :: String -> String
 > doCheck = check . parse'
 
+The `doSatCheck` function does what `satString` does, except it parses
+an input string first.
+
 > doSatCheck :: String -> String
-> doSatCheck s =
->   if sat $ parse' s
->   then "sat"
->   else "unsat"
+> doSatCheck = satString . parse'
 
-----------------------------------------------------------------------
--- OTHER STUFF // Maybe unnecessary
-----------------------------------------------------------------------
+We also define a couple of other functions for consistency with our
+Proof Graph presentation (see `./ProofGraph.hs`), but they are not
+part of the decision procedure.
 
+> sigma_one :: Ord a => PNP a -> Set (LTL a)  
+> sigma_one  p = step $ pos p
+>
+> sigma_four :: Ord a => PNP a -> Set (LTL a)
+> sigma_four p = step $ neg p
+>
 > sigma_two :: Ord a => PNP a -> Set (LTL a)
 > sigma_two  p = Set.filter
 >                (\f -> case f of
@@ -374,8 +523,7 @@ TODO : Describe the fixpoint
 >                                  && a `Set.member` pos p
 >                       _      -> False
 >               ) (pos p)
-
-
+>
 > sigma_five :: Ord a => PNP a -> Set (LTL a)
 > sigma_five  p= Set.filter
 >              (\f -> case f of
@@ -383,16 +531,13 @@ TODO : Describe the fixpoint
 >                                 || b `Set.member` neg p
 >                      _      -> False)
 >              (neg p)
-
-TODO : This doesn't seem necessary here.
-
+>
 > sigma :: Ord a => PNP a -> PNP a
 > sigma p = p {
 >   pos = sigma_one p `Set.union` sigma_two p `Set.union` sigma_three p,
 >   neg = sigma_four p `Set.union` sigma_five p
 >   }
- TODO : is this necessary?
-
+>
 > getPrimitives :: PNP a -> PNP a
 > getPrimitives p = p { pos = Set.filter isProp (pos p),
 >                       neg = Set.filter isProp (neg p)}

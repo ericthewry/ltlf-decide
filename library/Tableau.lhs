@@ -161,8 +161,8 @@ we construct the Tableau we will say that the root node is
 unsatisfiable if every path from it contains a closed node.
 
 > closed :: Ord a => PNP a -> Bool
-> closed p = F `Set.member` pos p
->   || not $ Set.null (pos p `Set.intersection` neg p)
+> closed p = (F `Set.member` pos p)
+>   || not (Set.null (pos p `Set.intersection` neg p))
 
 
 Now we define the tableau using the adjacency list representation of a
@@ -442,22 +442,51 @@ traditional sense. So, to conclude that a node is satsifiable, we only
 need to find a path that explores every possibility until the end of
 time, i.e. we get to a `Term` node. We call such paths "terminal
 paths" and the `terminalPath` function searches its input Tableau for
-these paths. The function `path` hids the fixpoint tail-recursion of
-`terminalPath`.
+these paths. 
 
 > terminalPath :: Ord a => Tableau a -> Set (PNP a) -> PNP a -> Maybe [PNP a]
 > terminalPath _ _    p | closed p            = Nothing
 > terminalPath _ seen p | p `Set.member` seen = Nothing
 > terminalPath _ _    p | typ p == Term       = Just [p]
 > terminalPath t seen p =
->   let succs = successors p t in -- what if I just replace this with makeSucc?
+>   let succs = successors p t in
 >   let paths = mapMaybe (terminalPath t (Set.insert p seen)) succs in
 >   case paths of
 >     []       -> Nothing
 >     (path:_) -> Just (p:path)
+
+However, everything about "building a tableau" up until
+now has been a complete lie, and we dont actually need to build the
+structure, we can just use `makeSucc` to run a depth-first search, and
+avoid all of the unnecessary effort of creating the whole structure if
+we don't need to; `terminalPath'` performs the search in this
+manner.
+
+> terminalPath' :: Ord a => Set (PNP a) -> PNP a -> Maybe [PNP a]
+> terminalPath' _    p | closed p            = Nothing
+> terminalPath' seen p | p `Set.member` seen = Nothing
+> terminalPath' _    p | typ p == Term       = Just [p]
+> terminalPath' seen p =
+>   let succs = makeSucc p in 
+>   let paths = mapMaybe (terminalPath' (Set.insert p seen)) succs in
+>   case paths of
+>     []       -> Nothing
+>     (path:_) -> Just (p:path)
+> 
+
+We can improve the performance even more by checking for only the
+existence of a terminal path without actually calculating it.
+
+> existsTerminalPath :: Ord a => Set (PNP a) -> PNP a -> Bool
+> existsTerminalPath _    p | closed p = False
+> existsTerminalPath seen p | p `Set.member` seen = False
+> existsTerminalPath _    p | typ p == Term = True
+> existsTerminalPath seen p =
+>   foldr (\q found -> existsTerminalPath (Set.insert p seen) q || found) False (makeSucc p)
 >
 > path :: Ord a => LTL a -> Maybe [PNP a]
-> path f = terminalPath (tableau f) Set.empty (buildRoot f)
+> path f = if existsTerminalPath Set.empty (buildRoot f) then Just [] else Nothing
+
 
 Now as defined before we can process the result of the `path` function
 as `sat`, `unsat` and `valid` which take LTLf formulae and return

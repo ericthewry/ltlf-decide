@@ -24,9 +24,8 @@ spec = parallel $ do
   
   describe "Decision procedure" $ do
     it "terminates on arbitrary inputs" $ do
-      forAll (resize 8 arbitrary :: Gen (LTL NamedProp)) $ \a ->
-        let res = sat a in
-          label (if res then "sat" else "unsat") True
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+          label (satString a) True
 
     it "rejects infinite traces (De Giacomo & Vardi)" $ do
       let a = P $ NamedProp "a"

@@ -464,9 +464,6 @@ existence of a terminal path without actually calculating it.
 > existsTerminalPath _    p | typ p == Term = True
 > existsTerminalPath seen p =
 >   foldr (\q found -> existsTerminalPath (Set.insert p seen) q || found) False (makeSucc p)
->
-> path :: Ord a => LTL a -> Maybe [PNP a]
-> path f = if existsTerminalPath Set.empty (buildRoot f) then Just [] else Nothing
 
 
 Now as defined before we can process the result of the `path` function
@@ -475,9 +472,9 @@ whether or not they are satisfiable, unsatisfiable or valid,
 respectively.
 
 > sat, unsat, valid :: Ord a => LTL a -> Bool
-> sat   = isJust . path
+> sat f = existsTerminalPath Set.empty (buildRoot f)
 > unsat = not . sat
-> valid = isNothing . path . negate
+> valid = not . sat . negate
 
 We also define a few useful functions for making interfacing with the
 decision procedure easier. `satString` returns `"sat"` if its input

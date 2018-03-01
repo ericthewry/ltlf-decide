@@ -1,57 +1,15 @@
 > {-# OPTIONS_GHC -Wall -fno-warn-unused-imports -fno-warn-name-shadowing #-}
 > {-# LANGUAGE TemplateHaskell,FlexibleContexts, FlexibleInstances #-}
 
-
-Here we present a simple decision procedure for Linear Temporal Logic
-over finite traces (henceforth LTLf). For the Syntax full syntax,
-please consult `./Syntax.hs`. Notice that type of terms is `LTL a`,
-because the syntax of LTL and LTLf is exactly the same. Since LTLf is
-a variant of LTL, we adopt the prieval name for the syntax.
-
-The semantics of the language are fairly simple. Formulae in the logic
-are evaluated over traces, which are arrays of valuation functions
-that take variables to truth values. There are three ways that a
-formula can be evaluated. It can be evaluated in a single state, the
-next state, or some collection of states, now and in the
-future.
-
-Say we are in some position `i` in a trace `t` of length `n`. If we
-swant to know omething about the current state `i` we can simply write
-a standard propositional logical formula. We will use the minimal
-presentation that uses variables, implication and the always-false
-symbol `F` (sometimes called "bot").  If we want to know about state
-`i+1`, then we write down formulae of the form `X f`, where `f`
-is another formula. When evaluated n the trace `t`, we say that `X f`
-is true in the current state iff `f` is true at state `i+1`, provided
-`i+1 < n`.
-
-These two syntactic and semantic forms are sufficient to
-express properties about the future, when we know exactly when we want
-to evaluate an event. To see if a property `f` holds 3 steps in the
-future, check `X X X f`. But we have no way to express statements like
-"always in the future a `f` holds" or "sometime in the future `f`
-holds". To do this, we introduce the binary infix "weak until"
-operator (`W`). When evaluating `f W f'` at position `i` in a trace
-`t` of length `n`, we say that `f W f'` is true if and only if there
-exists a position `j` in the trace `t` such that `f` holds at all
-positions between `i` and `j` and if `j+1 <= n`, then `f'` holds at
-position `j+1` of `t`.
-
-Our goal in defining a decision procedure is to take an arbitrary LTLf
-formula `f` and determine whether there exists a trace `t` such that
-`f` holds in `t` at position 0. If there is such a trace, we say that
-`f` is "satsifiable". Otherwise it is unsatisfiable. To do this we
-will define a Tableau structure explores all the implications of a
-given formula, and try and find a contradiction. If we can find no
-contradiction, we conclude that the formula is satisfiable.
-
-To evoke the methodology by which we produce a decision procedure,
-we've called the module `Tableau`.
+Here we present a tableau-based decision procedure for Linear Temporal
+Logic over finite traces (LTLf).
 
 > module Tableau where
+
+We hide standard library functions with interfering names.
+
 > import Prelude hiding (negate, or, and, until)
-> 
-> -- Dependencies
+
 > import Data.List hiding (or, and)
 > import Data.List.Split (endBy)
 > 
@@ -59,13 +17,49 @@ we've called the module `Tableau`.
 > 
 > import Data.Map (Map)
 > import qualified Data.Map as Map
-> -- 
+>
 > import Data.Set (Set)
 > import qualified Data.Set as Set
 
->
-> -- Importing the LTLf syntax.
+For the full syntax, see `Syntax.hs`. Terms are, in general, of type
+`LTL a`. The parameter `a` of the type `LTL` represents primitive
+propositions.
+
+Our decision procedure is for LTLf, but we call the type LTL because
+the syntax of the two logics are identical.
+
 > import Syntax
+
+The concrete syntax we use is minimal: as plain propositions, we have
+variables, false, and implication (encoding other propositions is not
+hard: see `Syntax.hs`); as temporal propositions, we have the *next
+modality*, which we write `X :: LTL a -> LTL a`, and the *weak until
+modality*, which we write `W :: LTL a -> LTL a -> LTL a`.
+
+Formulae in the logic are evaluated over *traces*, which are finite
+sequences of *valuation functions* mapping variables to truth
+values. Formulae are evaluated in a given index of the trace, from the
+`i`th valuation onwards.
+
+Lifting valuations to each valuation is straightforward. To check `X
+phi` in the `i`th state, we check `phi` in the `i+1`th state. To check
+`phi W psi` in the `i`th state, we need some (possibly empty) trace of
+states where `phi` holds followed by one where `psi` holds. Other
+temporal encodings---always, ever, strong until---follow (see
+`Syntax.hs`).
+
+Our goal in defining a decision procedure is to take an arbitrary LTLf
+formula `f` and determine whether there exists a trace `t` such that
+`f` holds in `t` at position 0. If there is such a trace, then `f` is
+"satsifiable"; otherwise, `f` is unsatisfiable. To decide whether `f`
+is satisfiable, we construct a *tableau* structure (type
+`Tableau`). Our construction procedure unrolls implications and
+temporal formulae, searching for a contradiction---if we can't find
+one, we can conclude that the formula is satisfiable.
+
+The tableau is a graph of *positive-negative pairs*, a pair of sets of
+formulae: a set of positive formulae `pos` and a set of negative
+formulae `neg`.
 
 As described above, the nodes of the Tableau structures called
 PNPs. Intuitively, the `pos` set is the set of LTLf formulae that are

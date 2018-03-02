@@ -151,43 +151,41 @@ And we can determine the successors of a given PNP in the tableau:
 > successors p (Tableau t) = Map.findWithDefault [] p t
 
 Now that we've defined the Tableau data structure and some helper
-functions, we can start constructing it. The tableau is constructed in
-three main parts: a `buildRoot` function which creates a PNP from an
-arbitrary LTLf formula, a `makeSucc` function which computes a list of
-the PNP successors of a PNP, and a `buildTableau` function which
-computes the least fixpoint of `makeSucc` when given the result of
-`buildRoot`. There are a lot more auxiliary and helper functions that
-we'll get to along the way, but lets start with `buildRoot`. Once
-we've built the tableau we need to find a finite path in it that
-represents a finite-length trace that satisfies the input formula.
+functions, we can start constructing it; once we've built the tableau
+we need to find a finite path in it that represents a finite-length
+trace that satisfies the input formula.
 
-The basic idea of `buildRoot` is that it injects a formula `f` into
-the positive set of an empty PNP. In an LTL decision procedure that's
-all we would need to do, but in an LTLf decision procedure we need to
-take another simple step, which is to "inject finiteness". In other
-words, we insert one of the axioms of LTLf, FINITE, into the positive
-set. The FINITE axiom says `ever end` which means that eventually time
-will end. By including this axiom in our root node, we are
-automatically going to be checking whether or not it is the last state
-in time, before we can take a step. We could have easily built this
-into our decision procedure itself from scratch, but this version
-doesn't require much modification to the Tableau decision procedure
-for LTL.
+The tableau is constructed in three main parts: a `buildRoot` function
+which creates a PNP from an arbitrary LTLf formula, a `makeSucc`
+function which computes a list of the PNP successors of a PNP, and a
+`buildTableau` function which computes the least fixpoint of
+`makeSucc` when given the result of `buildRoot`. There are other
+auxiliary functions that we'll get to along the way, but lets start
+with `buildRoot`.
+
+The `buildRoot` function takes a formula `f` and creates an empty PNP
+with `f` in the true set the positive set of an empty PNP. In an
+ordinary LTL decision procedure that's all we would need to do, but
+we're trying to decide LTL**f**, i.e., we want to restrict our
+attention to finite traces. Accordingly, we also "inject finiteness",
+inserting `ever end` into the positive set as well. It turns out that
+`ever end` is one of the axioms of LTLf, FINITE; it requires that time
+eventually ends. By injecting this axiom into our root node, we
+guarantee that our tableau algorithm will repeatedly check whether or
+not time has ended. We could have built a different decision procedure
+from scratch, but injecting finiteness allows us to reuse the LTL
+procedure.
 
 > buildRoot :: Ord a => LTL a -> PNP a
 > buildRoot f = PNP Norm (Set.fromList [f, ever end]) Set.empty
 
-The functions `ever` and `end` are new, but can be defined in terms of
-`W`, `F` and `->`. For the full definition, see `./Syntax.hs`.
-
-Now we can move onto defining the `makeSucc` function, which takes a
-PNP and return a list of successor PNPs. Since we are searching for a
-contradiction, we want to define the `makeSucc` function such that for
-a PNP `P`, if every successor in `makeSucc P` is unsatisfiable, tnhen
-`P` is also unsatisfiable. Since closed PNPs are unsatisfiable, we
-will eventually need to find a path that ends in a `Term` PNP with no
-closed nodes on it. For now, we are just concerned with how to define
-the `makeSucc` function.
+The `makeSucc` function takes a PNP and returns a list of successor
+PNPs. Since we are searching for a contradiction, the `makeSucc`
+function is sound, for all PNPs `P`, if every successor in `makeSucc
+P` is unsatisfiable, then `P` is also unsatisfiable. Since closed PNPs
+are unsatisfiable, finding a contradiction amounts to finding a path
+that ends in a `Term` PNP with no closed nodes on it. For now, we are
+just concerned with how to define the `makeSucc` function.
 
 For each syntactic term in the positive and negative sets we define a
 rule that explores some aspect of the current time moves time

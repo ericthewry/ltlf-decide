@@ -1,8 +1,11 @@
-> {-# OPTIONS_GHC -Wall -fno-warn-unused-imports -fno-warn-name-shadowing #-}
-> {-# LANGUAGE TemplateHaskell,FlexibleContexts, FlexibleInstances #-}
+< {-# OPTIONS_GHC -Wall -fno-warn-unused-imports -fno-warn-name-shadowing #-}
+< {-# LANGUAGE TemplateHaskell,FlexibleContexts, FlexibleInstances #-}
 
 Here we present a tableau-based decision procedure for Linear Temporal
-Logic over finite traces (LTLf).
+Logic over finite traces (LTLf). There are two versions of the
+decision procedure: one which explicitly builds a tableau data
+structure (`terminalPath`), and another which simply performs
+depth-first search (`terminalPath'` and `existsTerminalPath'`).
 
 > module Tableau where
 
@@ -59,22 +62,14 @@ one, we can conclude that the formula is satisfiable.
 
 The tableau is a graph of *positive-negative pairs*, a pair of sets of
 formulae: a set of positive formulae `pos` and a set of negative
-formulae `neg`.
+formulae `neg`. The `PNP` type is parameterized by the type of
+propositions.
 
-As described above, the nodes of the Tableau structures called
-PNPs. Intuitively, the `pos` set is the set of LTLf formulae that are
-true, and the `neg` set is the set of formulae that are false.
+> data PNP a
+>   = PNP {typ :: PNPType, pos :: Set (LTL a), neg :: Set (LTL a) }
+>   deriving (Eq, Ord)
 
-The labels represent the different roles that PNPs will play in our
-tableau. `Norm` PNPs represent the proof-theoretic exploration of the
-current time step; `Temp` PNPs represent the first PNP to explore a
-new time step; finally `Term` PNPs represent the exploration of the
-end of time. When we create tableau nodes we make it so that once a
-node is a `Term` node, it can never not be terminal, however since
-`Temp` nodes represent a boundary, they must be a boundary. Then, the
-default for stepping a `Norm` PNP is to step it to another `Norm` PNP;
-if we want different behvaior (and we will) we will have to do it
-manually.
+Each PNP has one additional piece of information: a *label* of type `PNPType`.
 
 > data PNPType
 >   = Norm | Temp | Term
@@ -84,12 +79,20 @@ manually.
 > stepType Term = Term
 > stepType _ = Norm
 
-Now we can define PNPs and their `Show` instance
+The labels represent the different roles that PNPs will play in our
+tableau. `Norm` PNPs represent the proof-theoretic exploration of the
+current time step; `Temp` PNPs represent the first PNP to explore a
+new time step; finally `Term` PNPs represent the exploration of the
+end of time. When we create tableau nodes we make it so that once a
+node is a `Term` node, it can never not be terminal.  Since
+`Temp` nodes represent a boundary, they must be a boundary. Then, the
+default for stepping a `Norm` PNP is to step it to another `Norm` PNP;
+when we want different behavior, we will have to set the PNPType
+manually (see `stepTerm`).
 
-> data PNP a
->   = PNP {typ :: PNPType, pos :: Set (LTL a), neg :: Set (LTL a) }
->   deriving (Eq, Ord)
->
+We customize the show instance for each type of PNP, which should aid
+debugging.
+
 > instance (Eq a, Show a) => Show (PNP a) where
 >   show (PNP Temp p n) = "<|" ++ show (PNP Norm p n) ++ "|>"
 >   show (PNP Term p n) = show (PNP Norm p n) ++ "EOT"
@@ -100,63 +103,52 @@ Now we can define PNPs and their `Show` instance
 > showSet :: Show a => Set a -> String
 > showSet s  | Set.null s = "" -- "\\emptyset"
 >            | otherwise = "\\{" ++ (intercalate "," (map show $ Set.toAscList s)) ++ "\\}"
->
 
-We want to define a kind of semantics for these PNPs, so we say that a
-PNP is closed if `F` is a member of the positive set, or its positive
-and negative sets have a non-empty intersection. If we think of the
-positive set as "things that are true" and the negative set as "things
-that are false" then we certainly dont want `F` to be true, nor do we
-want a formula to be both true and false. This gives us the intuition
-that closed PNPs represent impossible and unsatisfiable states. When
-we construct the Tableau we will say that the root node is
-unsatisfiable if every path from it contains a closed node.
+PNPs may or may not represent possible states. For example, a PNP with
+`F` in the true set represents an impossible world; a PNP with the
+same formula in both the positive and negative sets is similarly
+impossible. We call such PNPs *closed*.
 
 > closed :: Ord a => PNP a -> Bool
 > closed p = (F `Set.member` pos p)
 >   || not (Set.null (pos p `Set.intersection` neg p))
 
-
-Now we define the tableau using the adjacency list representation of a
-digraph. The edges are unlabeled and the nodes are PNPs.
+We define the tableau as a directed graph where the states are
+PNPs. We use an adjacency list representation, i.e., a finite map from
+PNPs to PNPs.
 
 > newtype Tableau a = Tableau (Map (PNP a) [PNP a])
 
 > instance (Eq a, Show a) => Show (Tableau a) where
->   show (Tableau t) =
->     intercalate "\n" $ map showEdges (Map.toList t)
->     where
->       showEdges (p,succs) =
->         "STATE : " ++ show p ++ "\n  "
->            ++ intercalate "\n  " (map show succs)
+>   show (Tableau t) = intercalate "\n" $ map showEdges (Map.toList t)
+>     where showEdges (p,succs) =
+>             "STATE : " ++ show p ++ "\n  "
+>                        ++ intercalate "\n  " (map show succs)
 
-We define a few helper functions for the tableau, the `emptyTableau`
-term appropriately wraps the Map.empty term. The unseen function takes
-a Tableau t and a PNP n and returns true if n is not one of the nodes
-of the tableau. Here we tacitly assume that all of the nodes are
-represented as a key to the adjacency list. The `addEdges` function
-takes a PNP `p` and a list of PNPs `succs` and inserts edges between
-each p and each of the successors in `succs`. This is simply a
-concatenation with the adjacency list. The `successors` function just
-looks up the successors of `p`, returning an empty list if `p` cannot
-be found in the tableau. The `tunion` function simply takes the union
-of two tableaux.
+We can define the empty tableau:
 
 > emptyTableau :: Tableau a
 > emptyTableau = Tableau Map.empty
->
+
+We can determine whether or not a given PNP has been seen yet, i.e.,
+is a state in our Tableau:
+
 > unseen :: Ord a => Tableau a -> PNP a -> Bool
 > unseen (Tableau t) n = Map.notMember n t
->
+
+We can add edges to the tableau, either one at a time or by merging
+two tableaux:
+
 > addEdges :: Ord a => PNP a -> [PNP a] -> Tableau a -> Tableau a
 > addEdges p succs (Tableau t) = Tableau (Map.insert p succs t)
->
-> successors :: Ord a => PNP a -> Tableau a -> [PNP a]
-> successors p (Tableau t) = Map.findWithDefault [] p t
 >
 > tunion :: Ord a => Tableau a -> Tableau a -> Tableau a
 > tunion (Tableau t) (Tableau t') = Tableau $ t `Map.union` t'
 
+And we can determine the successors of a given PNP in the tableau:
+
+> successors :: Ord a => PNP a -> Tableau a -> [PNP a]
+> successors p (Tableau t) = Map.findWithDefault [] p t
 
 Now that we've defined the Tableau data structure and some helper
 functions, we can start constructing it. The tableau is constructed in
@@ -329,7 +321,8 @@ If we decide that we can take a step forwards, we will apply the
 PNP. When applied to a set `S`, this function computes the set `{f | X
 f in S}`. It drops all formulae that were expanded in the previous
 time step and keeps only those that must be evaluated in the next time
-step. Then we can use this on the positive and negative sets to define `stepPNP`
+step. Then we can use this on the positive and negative sets to define
+`stepPNP`:
 
 > step :: Ord a => Set (LTL a) -> Set (LTL a)
 > step = Set.foldr (\f nextSet ->
@@ -403,7 +396,6 @@ the continuation-passing needed for the fix-point.
 >
 > tableau :: Ord a => LTL a -> Tableau a
 > tableau f = buildTableau makeSucc [buildRoot f] emptyTableau
-
 
 Now that we've built the tableau, we need to determine whether or not
 the root node is closed. If the root node is closed is then it is

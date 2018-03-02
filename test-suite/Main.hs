@@ -38,9 +38,6 @@ spec = parallel $ do
     it "correctly parses & accepts valid formulae" $ do
       foldr (\f b -> (&&) b $ valid $ parse' f) True valids
 
-
-
-
 satisfiables :: [String]
 satisfiables = ["top",
                "a",

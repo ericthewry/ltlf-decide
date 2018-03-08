@@ -15,7 +15,7 @@ We hide standard library functions with interfering names.
 
 > import Data.List hiding (or, and)
 > 
-> import Data.Maybe (mapMaybe)
+> import Data.Maybe (mapMaybe, isJust)
 > 
 > import Data.Map (Map)
 > import qualified Data.Map as Map
@@ -506,6 +506,12 @@ respectively.
 > sat f = existsTerminalPath Set.empty (buildRoot f)
 > unsat = not . sat
 > valid = not . sat . negate
+
+For the sake of benchmarking, we can compare our methods:
+
+> searchSat, tableauSat :: Ord a => LTL a -> Bool
+> searchSat f = isJust $ terminalPath' Set.empty (buildRoot f)
+> tableauSat f = isJust $ terminalPath (tableau f) Set.empty (buildRoot f)
 
 We also define a few useful functions for making interfacing with the
 decision procedure easier. `satString` returns `"sat"` if its input

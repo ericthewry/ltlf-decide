@@ -9,7 +9,6 @@ import Test.QuickCheck
 
 import Data.Maybe (isJust)
 
-import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Tableau
@@ -28,24 +27,24 @@ spec = parallel $ do
         parse' (show f) `shouldBe` f
   
   describe "Decision procedure" $ do
-    it "terminates on arbitrary inputs" $ do
+    it "sat terminates on arbitrary inputs" $ do
       forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
           label (satString a) True
 
-    it "terminalPath and terminalPath' agree on sat/unsat" $ do
-      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
-        isJust (terminalPath (tableau a) Set.empty (buildRoot a)) ===
-        isJust (terminalPath' Set.empty (buildRoot a))
-
-    it "terminalPath and terminalPath' agree on result" $ do
-      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
-        terminalPath (tableau a) Set.empty (buildRoot a) ===
-        terminalPath' Set.empty (buildRoot a)
-
-    it "terminalPath' and existsTerminalPath agree on sat/unset" $ do
+    it "searchSat and sat agree" $ do
       forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
         isJust (terminalPath' Set.empty (buildRoot a)) ===
         existsTerminalPath Set.empty (buildRoot a)
+
+    it "tableauSat and searchSat agree" $ do
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        tableauSat a === searchSat a
+
+    -- this can take some time... :(
+    it "terminalPath and terminalPath' agree on result" $ do
+      forAll (resize 8 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        terminalPath (tableau a) Set.empty (buildRoot a) ===
+        terminalPath' Set.empty (buildRoot a)
   
     it "rejects infinite traces (De Giacomo & Vardi)" $ do
       let a = P $ NamedProp "a"

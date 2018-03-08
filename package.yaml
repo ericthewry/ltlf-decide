@@ -74,6 +74,7 @@ tests:
     - tasty-hspec
     - hspec
     - QuickCheck
+    - containers
     ghc-options:
     - -rtsopts
     - -threaded

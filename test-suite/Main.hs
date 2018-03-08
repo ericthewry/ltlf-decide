@@ -7,6 +7,11 @@ import qualified Test.Tasty
 import Test.Tasty.Hspec
 import Test.QuickCheck
 
+import Data.Maybe (isJust)
+
+import Data.Set (Set)
+import qualified Data.Set as Set
+
 import Tableau
 import Syntax
 
@@ -27,6 +32,21 @@ spec = parallel $ do
       forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
           label (satString a) True
 
+    it "terminalPath and terminalPath' agree on sat/unsat" $ do
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        isJust (terminalPath (tableau a) Set.empty (buildRoot a)) ===
+        isJust (terminalPath' Set.empty (buildRoot a))
+
+    it "terminalPath and terminalPath' agree on result" $ do
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        terminalPath (tableau a) Set.empty (buildRoot a) ===
+        terminalPath' Set.empty (buildRoot a)
+
+    it "terminalPath' and existsTerminalPath agree on sat/unset" $ do
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        isJust (terminalPath' Set.empty (buildRoot a)) ===
+        existsTerminalPath Set.empty (buildRoot a)
+  
     it "rejects infinite traces (De Giacomo & Vardi)" $ do
       let a = P $ NamedProp "a"
       let b = P $ NamedProp "b"

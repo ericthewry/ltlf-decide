@@ -73,6 +73,45 @@ sigmaGraph :: Ord a => PNP a -> Tableau a
 sigmaGraph p = buildTableau succs [p] emptyTableau
   where succs p = [sigma p]
 
+sigma_one :: Ord a => PNP a -> Set (LTL a)  
+sigma_one  p = step $ pos p
+
+sigma_four :: Ord a => PNP a -> Set (LTL a)
+sigma_four p = step $ neg p
+
+sigma_two :: Ord a => PNP a -> Set (LTL a)
+sigma_two  p = Set.filter
+               (\f -> case f of
+                      (W _ b) -> b `Set.member` neg p
+                      _      -> False
+               ) (pos p)
+
+sigma_three :: Ord a => PNP a -> Set (LTL a)               
+sigma_three p = Set.filter
+              (\f -> case f of
+                      (W a _) -> (X top) `Set.member` neg p
+                                 && a `Set.member` pos p
+                      _      -> False
+              ) (pos p)
+
+sigma_five :: Ord a => PNP a -> Set (LTL a)
+sigma_five  p= Set.filter
+             (\f -> case f of
+                     (W a b) -> a `Set.member` pos p
+                                || b `Set.member` neg p
+                     _      -> False)
+             (neg p)
+
+sigma :: Ord a => PNP a -> PNP a
+sigma p = p {
+  pos = sigma_one p `Set.union` sigma_two p `Set.union` sigma_three p,
+  neg = sigma_four p `Set.union` sigma_five p
+  }
+
+getPrimitives :: PNP a -> PNP a
+getPrimitives p = p { pos = Set.filter isProp (pos p),
+                      neg = Set.filter isProp (neg p)}
+
 
 --- PRE:: PNP  is complete.
 proofGraph :: Ord a => PNP a -> Tableau a

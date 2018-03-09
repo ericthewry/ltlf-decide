@@ -12,6 +12,7 @@ import Data.Maybe (isJust)
 import qualified Data.Set as Set
 
 import Tableau
+import qualified TableauFSet
 import Syntax
 
 main :: IO ()
@@ -25,7 +26,13 @@ spec = parallel $ do
     it "are inverses" $ do
       forAll (resize 100 arbitrary :: Gen (LTL NamedProp)) $ \f ->
         parse' (show f) `shouldBe` f
-  
+
+  describe "Specialized FSets" $ do
+    it "sat with and without FSets agree" $ do
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        TableauFSet.existsTerminalPath Set.empty (TableauFSet.buildRoot a) ===
+        Tableau.existsTerminalPath     Set.empty (buildRoot a)
+
   describe "Decision procedure" $ do
     it "sat terminates on arbitrary inputs" $ do
       forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->

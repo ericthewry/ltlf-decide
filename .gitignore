@@ -4,3 +4,4 @@
 /*.cabal
 # temporary output files for graphics generation
 output/*
+*~

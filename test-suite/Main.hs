@@ -28,10 +28,21 @@ spec = parallel $ do
         parse' (show f) `shouldBe` f
 
   describe "Specialized FSets" $ do
-    it "sat with and without FSets agree" $ do
+    it "agree with normal sets on sat" $ do
       forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
-        TableauFSet.existsTerminalPath Set.empty (TableauFSet.buildRoot a) ===
-        Tableau.existsTerminalPath     Set.empty (buildRoot a)
+        TableauFSet.sat a ===
+        Tableau.sat a
+
+    it "agree with normal sets on searchSat" $ do
+      forAll (resize 10 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        TableauFSet.searchSat a ===
+        Tableau.searchSat a
+
+    it "agree with normal sets on tableauSat" $ do
+      forAll (resize 8 arbitrary :: Gen (LTL NamedProp)) $ \a ->
+        TableauFSet.tableauSat a ===
+        Tableau.tableauSat a
+
 
   describe "Decision procedure" $ do
     it "sat terminates on arbitrary inputs" $ do
